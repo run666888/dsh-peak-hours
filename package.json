@@ -1,0 +1,58 @@
+{
+  "name": "dsh-peak-hours",
+  "version": "1.10.0",
+  "type": "module",
+  "description": "Sidebar badge that marks the current DeepSeek peak-pricing window, with a 24-hour schedule bar, a now-cursor and a countdown to the next switch.",
+  "license": "MIT",
+  "author": "run666888 <zhirunli6@gmail.com>",
+  "homepage": "https://github.com/run666888/dsh-peak-hours#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/run666888/dsh-peak-hours.git"
+  },
+  "bugs": {
+    "url": "https://github.com/run666888/dsh-peak-hours/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "peak-hours",
+    "pricing",
+    "sidebar"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "assets",
+    "screenshots",
+    "screenshots.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  }
+}

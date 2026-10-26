@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Peak Hours Badge",
+    "description": "Shows in the sidebar whether DeepSeek API pricing is currently in peak hours, with a countdown to the next switch."
+  }
+}
