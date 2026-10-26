@@ -1,3 +1,3 @@
 - insert:
     - id: dsh-peak-hours
-      name: '@local/dsh-peak-hours'
+      name: 'dsh-peak-hours'

@@ -1,6 +1,6 @@
 {
   "name": "dsh-peak-hours",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "type": "module",
   "description": "Sidebar badge that marks the current DeepSeek peak-pricing window, with a 24-hour schedule bar, a now-cursor and a countdown to the next switch.",
   "license": "MIT",
