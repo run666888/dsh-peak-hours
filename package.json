@@ -1,8 +1,8 @@
 {
   "name": "dsh-peak-hours",
-  "version": "1.10.1",
+  "version": "1.11.0",
   "type": "module",
-  "description": "Sidebar badge that marks the current DeepSeek peak-pricing window, with a 24-hour schedule bar, a now-cursor and a countdown to the next switch.",
+  "description": "Sidebar badge that marks the current DeepSeek peak-pricing window: 24-hour schedule bar, now-cursor, countdown to the next switch, click to copy the state.",
   "license": "MIT",
   "author": "run666888 <zhirunli6@gmail.com>",
   "homepage": "https://github.com/run666888/dsh-peak-hours#readme",
@@ -13,11 +13,19 @@
   "bugs": {
     "url": "https://github.com/run666888/dsh-peak-hours/issues"
   },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test",
+    "verify": "npm pack --dry-run"
+  },
   "keywords": [
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
     "peak-hours",
+    "off-peak",
     "pricing",
     "sidebar"
   ],
@@ -28,7 +36,8 @@
     ".": "./index.js",
     "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
-    "./icon": "./icon.svg"
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",
@@ -40,6 +49,7 @@
     "screenshots",
     "screenshots.json",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "dsh": {

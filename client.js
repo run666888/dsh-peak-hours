@@ -14,11 +14,14 @@ window.__ModuleLoader__.load({
       [14 * 60, 18 * 60],
     ];
 
+    // 距峰↔谷切换不足该分钟数时，倒计时与圆点进入强调态。
+    const SOON_MINUTES = 10;
+
     /**
      * 中国法定节假日（全天空闲计价）。来源：2026-09-19 官方说明
      * 「法定节假日全天、调休上班的周末全天均按空闲时段计费」。
-     * 目前核对过 2026 年中秋、国庆；往后年份请按官方公告补充，
-     * 未覆盖的年份只按周末规则判定。
+     * 已核对 2026 年中秋、国庆；新一年的放假安排公布后按公告补充，
+     * 未收录的年份只按周末规则判定（周末本就全天空闲，因此不会判错方向）。
      */
     const HOLIDAYS = {
       2026: [
@@ -27,6 +30,7 @@ window.__ModuleLoader__.load({
         '2026-10-05', '2026-10-06', '2026-10-07',
       ],
     };
+    const HOLIDAY_YEARS = Object.keys(HOLIDAYS).sort();
     const holidayCache = new Map();
     function holidaySet(year) {
       if (holidayCache.has(year)) return holidayCache.get(year);
@@ -73,6 +77,15 @@ window.__ModuleLoader__.load({
       };
     }
 
+    /** 次日的计价形态：holiday / weekend / workday。 */
+    function kindAt(ms) {
+      const t = beijing(ms);
+      const holidays = holidaySet(t.year);
+      if (holidays && holidays.has(t.key)) return 'holiday';
+      if (t.dow === 0 || t.dow === 6) return 'weekend';
+      return 'workday';
+    }
+
     /** 下一个峰↔谷切换的瞬间（分钟对齐），最多向前找 14 天。 */
     function nextSwitch(ms) {
       const current = stateAt(ms);
@@ -107,7 +120,7 @@ window.__ModuleLoader__.load({
       return { start, end, progress };
     }
 
-    /** 当天 00:00–24:00 的峰谷分段（分钟），画成红绿相间的日程条。 */
+    /** 当天 00:00–24:00 的峰谷分段（分钟），画成橙蓝相间的日程条。 */
     function daySchedule(ms) {
       const st = stateAt(ms);
       if (st.allDayOff) return [{ from: 0, to: 1440, peak: false }];
@@ -142,6 +155,10 @@ window.__ModuleLoader__.load({
       return b.month + '-' + pad2(b.day) + ' ' + b.clock;
     }
 
+    function holidayNote(t) {
+      return (t('tip.table') || '').replace('{years}', HOLIDAY_YEARS.join(' / '));
+    }
+
     function tooltip(t, st, phase, now) {
       const lines = [
         t('tip.head'),
@@ -153,6 +170,14 @@ window.__ModuleLoader__.load({
       ];
       if (st.isHoliday) lines.push(t('tip.holidayToday'));
       else if (st.isWeekend) lines.push(t('tip.weekendToday'));
+      const tomorrow = kindAt(now + 1440 * MINUTE);
+      lines.push(
+        tomorrow === 'holiday'
+          ? t('tip.tomorrowHoliday')
+          : tomorrow === 'weekend'
+            ? t('tip.tomorrowWeekend')
+            : t('tip.tomorrowWorkday'),
+      );
       if (phase.start !== null && phase.end !== null) {
         lines.push(
           t('tip.phase') + clockLabel(phase.start) + ' → ' + clockLabel(phase.end),
@@ -169,10 +194,68 @@ window.__ModuleLoader__.load({
         t('tip.flash'),
         t('tip.pro'),
         '',
-        t('tip.table'),
+        holidayNote(t),
         t('tip.tz'),
+        t('tip.hint'),
       );
       return lines.join('\n');
+    }
+
+    function copySummary(t, st, phase, now) {
+      const pill = st.peak ? t('price.multiplier') : t('price.discount');
+      const rest =
+        phase.end !== null
+          ? t('tip.next') +
+            fmtDuration(phase.end - now, t) +
+            (st.peak ? t('next.off') : t('next.peak'))
+          : '';
+      return (
+        'DeepSeek ' +
+        (st.peak ? t('status.peak') : t('status.off')) +
+        ' ' +
+        pill +
+        ' · ' +
+        rest +
+        ' ' +
+        t('copy.suffix')
+      );
+    }
+
+    /** 复制到剪贴板：Clipboard API 优先，失败退回临时 textarea。 */
+    function writeClipboard(text) {
+      try {
+        if (
+          typeof navigator !== 'undefined' &&
+          navigator.clipboard &&
+          typeof navigator.clipboard.writeText === 'function'
+        ) {
+          return Promise.resolve(navigator.clipboard.writeText(text)).then(
+            () => true,
+            () => fallbackCopy(text),
+          );
+        }
+      } catch {
+        /* 落到兜底 */
+      }
+      return Promise.resolve(fallbackCopy(text));
+    }
+
+    function fallbackCopy(text) {
+      try {
+        if (typeof document === 'undefined' || !document.body) return false;
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand && document.execCommand('copy');
+        document.body.removeChild(area);
+        return !!ok;
+      } catch {
+        return false;
+      }
     }
 
     // 字族跟随宿主，字号显式压到侧栏次级字号（0.8125rem ≈ 13px），
@@ -189,10 +272,14 @@ window.__ModuleLoader__.load({
         font-family: inherit; font-size: 14px; font-size: .875rem;
         font-weight: 400; line-height: 1.45;
         color: var(--dsw-alias-label-primary);
-        user-select: none; cursor: default;
+        user-select: none; cursor: pointer; outline: none;
         transition: background-color .15s ease;
       }
       .dshph-root:hover { background: var(--dsw-alias-bg-layer-2); }
+      .dshph-root:focus-visible {
+        outline: 2px solid var(--dsw-alias-brand-primary, #4d6bfe);
+        outline-offset: 1px;
+      }
       .dshph-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
       .dshph-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; }
       .dshph-peak .dshph-dot {
@@ -202,6 +289,11 @@ window.__ModuleLoader__.load({
       .dshph-off .dshph-dot {
         background: var(--dshph-off);
         box-shadow: 0 0 0 3px rgba(77, 107, 254, .2);
+      }
+      .dshph-dot-soon { animation: dshph-pulse 1.6s ease-in-out infinite; }
+      @keyframes dshph-pulse {
+        0%, 100% { box-shadow: 0 0 0 2px rgba(245, 158, 11, .22); }
+        50% { box-shadow: 0 0 0 5px rgba(245, 158, 11, .06); }
       }
       .dshph-label,
       .dshph-pill,
@@ -216,6 +308,8 @@ window.__ModuleLoader__.load({
         flex: 0 1 auto; min-width: 0; overflow: hidden;
         text-overflow: ellipsis; white-space: nowrap;
       }
+      .dshph-soon .dshph-next { color: #f59e0b; font-weight: 600; }
+      .dshph-toast { color: var(--dsw-alias-label-secondary); }
       .dshph-track {
         position: relative; height: 8px; border-radius: 999px;
         background: var(--dsw-alias-bg-layer-2); overflow: hidden;
@@ -240,6 +334,11 @@ window.__ModuleLoader__.load({
       }
       .dshph-rail .dshph-track { width: 26px; height: 6px; }
       .dshph-rail .dshph-cursor { width: 1.5px; }
+      @media (prefers-reduced-motion: reduce) {
+        .dshph-root, .dshph-root * {
+          animation: none !important; transition: none !important;
+        }
+      }
     `;
 
     function ensureStyle() {
@@ -270,18 +369,25 @@ window.__ModuleLoader__.load({
       'tip.head': 'DeepSeek 峰谷计费',
       'tip.current': '当前：',
       'tip.window': '高峰时段：工作日 09:00–12:00、14:00–18:00（北京时间）',
-      'tip.bar': '日程条：当天 00:00–24:00，红色=高峰、绿色=空闲，白线是当前时刻',
+      'tip.bar': '日程条：当天 00:00–24:00，橙色=高峰、蓝色=空闲，白线是当前时刻',
       'tip.rule': '其余时间按空闲计价，闲时价为高峰价的一半',
       'tip.weekend': '周末与法定节假日全天按空闲计价',
       'tip.holidayToday': '今天：法定节假日，全天按空闲计价',
       'tip.weekendToday': '今天：周末，全天按空闲计价',
+      'tip.tomorrowHoliday': '明天：法定节假日，全天按空闲计价',
+      'tip.tomorrowWeekend': '明天：周末，全天按空闲计价',
+      'tip.tomorrowWorkday': '明天：工作日，恢复按 09:00–12:00、14:00–18:00 计价',
       'tip.phase': '本段：',
       'tip.next': '距切换：',
       'tip.prices': '价格（元/百万 tokens，空闲 → 高峰）',
       'tip.flash': 'deepseek-flash：缓存命中 0.02 → 0.04｜未命中 1 → 2｜输出 4 → 8',
       'tip.pro': 'deepseek-v4-pro：缓存命中 0.15 → 0.30｜未命中 4.5 → 9.0｜输出 13.5 → 27.0',
-      'tip.table': '节假日表当前覆盖 2026 年中秋、国庆；其他年份请在源码 HOLIDAYS 中补充',
+      'tip.table': '节假日表已收录 {years} 年中秋、国庆；新一年安排公布后随版本更新',
       'tip.tz': '判定时区：北京时间（UTC+8）',
+      'tip.hint': '点击复制当前状态',
+      'copy.ok': '已复制',
+      'copy.fail': '复制失败',
+      'copy.suffix': '（北京时间）',
     };
 
     const EN = {
@@ -299,18 +405,25 @@ window.__ModuleLoader__.load({
       'tip.head': 'DeepSeek peak/off-peak pricing',
       'tip.current': 'Now: ',
       'tip.window': 'Peak: weekdays 09:00–12:00 and 14:00–18:00 (Beijing time)',
-      'tip.bar': 'Day bar: 00:00–24:00, red = peak, green = off-peak, white line = now',
+      'tip.bar': 'Day bar: 00:00–24:00, amber = peak, blue = off-peak, white line = now',
       'tip.rule': 'Everything else is off-peak, priced at half of the peak rate',
       'tip.weekend': 'Weekends and public holidays are off-peak all day',
       'tip.holidayToday': 'Today: public holiday, off-peak all day',
       'tip.weekendToday': 'Today: weekend, off-peak all day',
+      'tip.tomorrowHoliday': 'Tomorrow: public holiday, off-peak all day',
+      'tip.tomorrowWeekend': 'Tomorrow: weekend, off-peak all day',
+      'tip.tomorrowWorkday': 'Tomorrow: weekday, peak windows apply again',
       'tip.phase': 'This block: ',
       'tip.next': 'Switch in ',
       'tip.prices': 'Price (CNY / million tokens, off-peak → peak)',
       'tip.flash': 'deepseek-flash: cache hit 0.02 → 0.04 | miss 1 → 2 | output 4 → 8',
       'tip.pro': 'deepseek-v4-pro: cache hit 0.15 → 0.30 | miss 4.5 → 9.0 | output 13.5 → 27.0',
-      'tip.table': 'The holiday table currently covers 2026 Mid-Autumn and National Day; add later years to HOLIDAYS',
+      'tip.table': 'Holiday table covers {years} (Mid-Autumn, National Day); updated per release',
       'tip.tz': 'Evaluated in Beijing time (UTC+8)',
+      'tip.hint': 'Click to copy the current state',
+      'copy.ok': 'Copied',
+      'copy.fail': 'Copy failed',
+      'copy.suffix': '(Beijing time)',
     };
 
     let translate = (key) => (EN[key] !== undefined ? EN[key] : key);
@@ -318,6 +431,8 @@ window.__ModuleLoader__.load({
     function PeakBadge(props) {
       const t = translate;
       const [now, setNow] = React.useState(() => Date.now());
+      const [toast, setToast] = React.useState('');
+
       React.useEffect(() => {
         const id = setInterval(() => setNow(Date.now()), 15000);
         return () => clearInterval(id);
@@ -330,11 +445,41 @@ window.__ModuleLoader__.load({
       const wide = !props || props.wide !== false;
       const stateText = off ? t('status.off') : t('status.peak');
       const title = tooltip(t, st, phase, now);
-      const rootClass = 'dshph-root ' + (off ? 'dshph-off' : 'dshph-peak');
+      const soon =
+        phase.end !== null && phase.end - now <= SOON_MINUTES * MINUTE;
+      const rootClass =
+        'dshph-root ' +
+        (off ? 'dshph-off' : 'dshph-peak') +
+        (soon ? ' dshph-soon' : '');
       const cursorLeft = pct(st.beijing.minute);
       const remaining = phase.end
         ? fmtDuration(phase.end - now, t) + (off ? t('next.peak') : t('next.off'))
         : '';
+
+      const onCopy = () => {
+        const text = copySummary(t, st, phase, now);
+        let result;
+        try {
+          result = writeClipboard(text);
+        } catch {
+          result = Promise.resolve(false);
+        }
+        Promise.resolve(result)
+          .then((ok) => setToast(ok ? t('copy.ok') : t('copy.fail')))
+          .catch(() => setToast(t('copy.fail')));
+        setTimeout(() => setToast(''), 1500);
+      };
+
+      const onKeyDown = (event) => {
+        if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+          event.preventDefault();
+          onCopy();
+        }
+      };
+
+      const headText = toast
+        ? h('span', { className: 'dshph-next dshph-toast' }, toast)
+        : h('span', { className: 'dshph-next' }, remaining);
 
       const track = h(
         'div',
@@ -350,32 +495,36 @@ window.__ModuleLoader__.load({
         h('span', { key: 'cursor', className: 'dshph-cursor', style: { left: cursorLeft } }),
       );
 
+      const common = {
+        title,
+        role: 'button',
+        tabIndex: 0,
+        onClick: onCopy,
+        onKeyDown,
+        'aria-label':
+          t('label') + ': ' + stateText + ', ' + remaining + '. ' + t('tip.hint'),
+      };
+
       if (!wide) {
         return h(
           'div',
-          {
-            className: rootClass + ' dshph-rail',
-            title,
-            role: 'status',
-            'aria-label': t('label') + ': ' + stateText,
-          },
-          h('span', { className: 'dshph-dot' }),
+          { ...common, className: rootClass + ' dshph-rail' },
+          h('span', {
+            className: 'dshph-dot' + (soon ? ' dshph-dot-soon' : ''),
+          }),
           track,
         );
       }
 
       return h(
         'div',
-        {
-          className: rootClass,
-          title,
-          role: 'status',
-          'aria-label': t('label') + ': ' + stateText,
-        },
+        { ...common, className: rootClass },
         h(
           'div',
           { className: 'dshph-head' },
-          h('span', { className: 'dshph-dot' }),
+          h('span', {
+            className: 'dshph-dot' + (soon ? ' dshph-dot-soon' : ''),
+          }),
           h('span', { className: 'dshph-label' }, stateText),
           h(
             'span',
@@ -383,7 +532,7 @@ window.__ModuleLoader__.load({
             off ? t('price.discount') : t('price.multiplier'),
           ),
           h('span', { className: 'dshph-spacer' }),
-          h('span', { className: 'dshph-next' }, remaining),
+          headText,
         ),
         track,
       );
