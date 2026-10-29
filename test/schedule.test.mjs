@@ -100,10 +100,13 @@ async function loadPlugin({ locale = 'zh-CN', clipboard, now } = {}) {
     },
   };
   mod.apply(ctx);
-  assert.equal(slots.length, 1, '应只注册一个侧栏动作');
+  const sidebar = slots.filter((s) => s.meta.name === 'sidebar.footer.action');
+  assert.equal(slots.length, 2, '应注册侧栏动作 + 设置页卡片');
+  assert.equal(sidebar.length, 1, '侧栏动作只有一个');
   return {
-    meta: slots[0].meta,
-    Component: slots[0].comp,
+    meta: sidebar[0].meta,
+    Component: sidebar[0].comp,
+    slots,
     writes,
     packs: localeStub.packs,
     setLocale: localeStub.setActive,

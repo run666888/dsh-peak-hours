@@ -1,8 +1,8 @@
 {
   "name": "dsh-peak-hours",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "type": "module",
-  "description": "Sidebar badge that marks the current DeepSeek peak-pricing window: 24-hour schedule bar, now-cursor, countdown to the next switch, click to copy the state.",
+  "description": "Sidebar badge that marks the current DeepSeek peak-pricing window (24-hour schedule bar, countdown, click to copy) plus a settings card that splits your logged usage into peak / off-peak tokens and compares what it actually cost against all-peak and all-off-peak.",
   "license": "MIT",
   "author": "run666888 <zhirunli6@gmail.com>",
   "homepage": "https://github.com/run666888/dsh-peak-hours#readme",
@@ -27,6 +27,8 @@
     "peak-hours",
     "off-peak",
     "pricing",
+    "cost",
+    "usage",
     "sidebar"
   ],
   "publishConfig": {
@@ -42,6 +44,7 @@
   "files": [
     "index.js",
     "client.js",
+    "lib",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",

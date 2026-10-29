@@ -1,6 +1,9 @@
 # dsh-peak-hours
 
-一个 DeepSeek Harness 的侧栏角标：**现在是不是高峰计价时段**。
+一个 DeepSeek Harness 插件，做两件事：
+
+1. **侧栏角标**：现在是不是高峰计价时段；
+2. **设置页卡片**：把你自己的用量按高峰/空闲拆开，并算出「实际花了多少」对比「全在高峰 / 全在空闲要花多少」。
 
 ![侧栏角标](screenshots/screenshot-1.png)
 
@@ -36,6 +39,24 @@
 
 时间一律按北京时间（UTC+8）算，和你浏览器的时区无关。
 
+## 用量与费用对比（设置 → 通用）
+
+除了角标，插件还在「设置 → 通用」里加了一行 **高峰/空闲用量与费用对比**（`settings.general.item`，排在「性能与用量」后面）。它读取本机 DeepSeek Harness 的会话日志，把每个请求按它发生的**北京时间**归到高峰或空闲，然后按模型价目表折算成钱：
+
+- **三个区间**：近 7 天 / 近 30 天 / 全部
+- **三笔钱**：实际花费（高峰按 ×2、空闲按 ×1）、假如全部落在高峰、假如全部落在空闲
+- **省下的钱与比例**：`¥68.49 · 35.5%` 这样
+- **用量拆分**：高峰 token、空闲 token、合计、高峰占比，配一条橙/蓝比例条
+- **分模型**：前四个模型各自的 token 与费用
+
+口径与限制（重要，也是诚实的地方）：
+
+- 只统计**能对上 DeepSeek 价目表**的模型（`deepseek-flash` 按 flash 价、`deepseek-v4-pro` / reasoner 按 pro 价）；其他供应商（claude、gpt、qmodel 等）只计 token、不计入费用，并在说明里单独标注
+- 价目表同样内置在 `lib/schedule.js`（元/百万 tokens，空闲→高峰）：flash 命中 0.02→0.04、未命中 1→2、输出 4→8；pro 命中 0.15→0.30、未命中 4.5→9、输出 13.5→27
+- 同一 `turn`+`step` 的多次采样按**最后一次**算（会话流式输出会反复覆盖同一步的用量），不会重复累加
+- 数据来自本机会话日志 `~/.dsh/sessions/<工作区>/<会话>/session.v4.jsonl.zstd`，**只在本地读、不外发**；解析结果按文件大小与修改时间缓存到 `~/.dsh/storages/peak-hours/cache.json`，第二次打开是毫秒级
+- 用量接口也有 60 秒 TTL，卡片上的「刷新」会跳过缓存重新扫一遍
+
 ## 安装
 
 从 npm：
@@ -61,17 +82,23 @@ dsh plugin --profile web remove dsh-peak-hours
 ## 兼容性
 
 - 需要带客户端 UI 的 DeepSeek Harness Web GUI（`dsh.client` 声明为 `platform: web`）
-- 纯客户端插件：不注册 host 工具、不写文件、不发网络请求、不需要任何配置或凭据
+- 客户端 + 一个只读的 host 半：host 半注册一条 `GET /dsh-peak-hours/api/usage`，读取本机会话日志算峰谷账，**不发任何网络请求**；除 `~/.dsh/storages/peak-hours/cache.json` 这一份解析缓存外不写文件，不需要任何配置或凭据
+- 角标部分纯客户端，不依赖 host 半；即使 host 半取数失败，角标照常工作
 - 颜色是固定值（高峰 `#f59e0b`、空闲 `#4d6bfe`，即 DeepSeek 品牌蓝），不跟随主题 `brand-primary`，以免换皮肤后蓝色被改成别的色
 
 ## 开发
 
 ```sh
-npm test          # 15 个单元测试（node --test，零依赖）
+npm test          # 24 个单元测试（node --test，零依赖）
 npm run verify    # npm pack --dry-run，检查发布清单
 ```
 
-测试通过 `vm` 加载 `client.js`，用最小的 React / locale / document 替身渲染组件，因此不用起 GUI 也能验证时段判定、分段宽度、折叠态与复制逻辑。
+测试分两块，全部零依赖、不用起 GUI：
+
+- `test/schedule.test.mjs`：通过 `vm` 加载 `client.js`，用最小的 React / locale / document 替身渲染角标，验证时段边界、日程条分段与宽度、游标位置、折叠态、复制与中英文 key 对齐
+- `test/usage.test.mjs`：直接测 host 半的 `lib/schedule.js` 与 `lib/usage.js`，用合成事件验证窗口判定、节假日、模型分类、价格公式、`turn+step` 替换语义、按日+小时+模型分桶、峰谷费用对比与区间过滤
+
+设置页卡片还有一个独立的 headless 渲染检查（真实接口数据 + 最小 hooks 替身），确认取数成功后不会渲染崩溃。
 
 ## 许可
 

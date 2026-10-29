@@ -1,5 +1,17 @@
 # 更新日志
 
+## 1.12.0 — 2026-10-29
+
+### 新增
+
+- **设置页「高峰/空闲用量与费用对比」卡片**（`settings.general.item`，排在「性能与用量」之后）：把本机会话日志里的每个请求按**发生时刻的北京时间**归到高峰或空闲，按模型价目表折算成钱，给出近 7 天 / 近 30 天 / 全部三个区间的「实际花费、全高峰、全空闲、省下的钱与比例、高峰占比、分模型明细」。想查「我到底因为错峰省了多少」时，不用再手算。
+- **host 半**：`index.js` 注册 `GET /dsh-peak-hours/api/usage`，60 秒 TTL + `?fresh=1` 强制刷新 + in-flight 去重；`lib/zstd.js` 自己按帧切开多帧 zstd 会话日志（`zlib.zstdDecompressSync` 只能解首帧），`lib/usage.js` 增量扫描并按文件大小/修改时间缓存到 `~/.dsh/storages/peak-hours/cache.json`。
+- 新增 10 个用例覆盖 host 半（窗口边界、周末/节假日、模型分类、价格公式、`turn+step` 替换、分桶、费用对比、区间过滤），测试总数 15 → 24。
+
+### 修正
+
+- 分模型明细里同名模型（如 `deepseek-account/deepseek-flash` 与 `deepseek-official/deepseek-flash`）不再显示成两行一模一样，第二个起会带提供商后缀（`· personal` / `· official`）。
+
 ## 1.11.0 — 2026-10-29
 
 ### 修正
