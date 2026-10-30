@@ -111,8 +111,13 @@ async function loadPlugin({ locale = 'zh-CN', clipboard, now } = {}) {
   };
   mod.apply(ctx);
   const sidebar = slots.filter((s) => s.meta.name === 'sidebar.footer.action');
-  assert.equal(slots.length, 2, '应注册侧栏动作 + 设置页卡片');
+  assert.equal(slots.length, 3, '应注册侧栏动作 + 设置页卡片 + 底栏内联角标');
   assert.equal(sidebar.length, 1, '侧栏动作只有一个');
+  assert.equal(
+    slots.filter((s) => s.meta.name === 'conversation.input.right').length,
+    1,
+    '内联角标挂在 conversation.input.right',
+  );
   return {
     meta: sidebar[0].meta,
     Component: sidebar[0].comp,
@@ -156,39 +161,39 @@ function findByClass(node, needle, out = []) {
 // 2026-10-29 是周四（工作日）；UTC+8 的 10:30 = 02:30Z。
 test('工作日 10:30 处于高峰，显示 ×2 与剩余空闲倒计时', async () => {
   const { tree, text } = await renderAt('2026-10-29T02:30:00Z');
-  assert.match(text, /高峰/);
+  assert.match(text, /Busy/);
   assert.match(text, /×2/);
-  assert.match(text, /后转空闲/);
+  assert.match(text, /后转 Free/);
   assert.match(classes(tree), /dshph-peak/);
   assert.doesNotMatch(classes(tree), /dshph-soon/);
 });
 
 test('工作日 13:00 处于空闲，显示 5 折与转高峰倒计时', async () => {
   const { text } = await renderAt('2026-10-29T05:00:00Z');
-  assert.match(text, /空闲/);
+  assert.match(text, /Free/);
   assert.match(text, /5 折/);
-  assert.match(text, /后转高峰/);
+  assert.match(text, /后转 Busy/);
 });
 
 test('午休 12:00 与 18:00 边界归为空闲', async () => {
-  assert.match((await renderAt('2026-10-29T04:00:00Z')).text, /空闲/);
-  assert.match((await renderAt('2026-10-29T10:00:00Z')).text, /空闲/);
+  assert.match((await renderAt('2026-10-29T04:00:00Z')).text, /Free/);
+  assert.match((await renderAt('2026-10-29T10:00:00Z')).text, /Free/);
 });
 
 test('14:00 边界归为高峰，09:00 之前是空闲', async () => {
-  assert.match((await renderAt('2026-10-29T06:00:00Z')).text, /高峰/);
-  assert.match((await renderAt('2026-10-29T00:30:00Z')).text, /空闲/);
+  assert.match((await renderAt('2026-10-29T06:00:00Z')).text, /Busy/);
+  assert.match((await renderAt('2026-10-29T00:30:00Z')).text, /Free/);
 });
 
 test('周末 10:30 全天空闲，tooltip 说明今天周末', async () => {
   const { tree, text } = await renderAt('2026-10-31T02:30:00Z');
-  assert.match(text, /空闲/);
+  assert.match(text, /Free/);
   assert.match(tree.props.title, /今天：周末/);
 });
 
 test('国庆假期 10:30 全天空闲，tooltip 说明法定节假日', async () => {
   const { tree, text } = await renderAt('2026-10-02T02:30:00Z');
-  assert.match(text, /空闲/);
+  assert.match(text, /Free/);
   assert.match(tree.props.title, /今天：法定节假日/);
 });
 
@@ -237,7 +242,7 @@ test('tooltip 含点击提示、时区与真实配色用词（非红绿）', asy
   assert.match(tip, /点击复制当前状态/);
   assert.match(tip, /北京时间/);
   assert.doesNotMatch(tip, /红色=高峰/);
-  assert.match(tip, /橙色=高峰、蓝色=空闲/);
+  assert.match(tip, /橙色 = Busy（高峰）、蓝色 = Free（空闲）/);
   assert.ok(!tip.includes('\\n'), 'tooltip 不应含字面反斜杠 n');
 });
 
@@ -250,16 +255,16 @@ test('点击复制把状态摘要写入剪贴板', async () => {
   tree.props.onClick();
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(plugin.writes.length, 1);
-  assert.match(plugin.writes[0], /高峰/);
+  assert.match(plugin.writes[0], /Busy/);
   assert.match(plugin.writes[0], /北京时间/);
 });
 
 test('英文语言包：不泄漏 key，且用词与配色一致', async () => {
   const en = await renderAt('2026-10-29T02:30:00Z', { wide: true }, { locale: 'en' });
-  assert.match(en.text, /Peak/);
+  assert.match(en.text, /Busy/);
   assert.match(en.text, /×2/);
   assert.doesNotMatch(en.text, /tip\.|copy\.|status\./);
-  assert.match(en.tree.props.title, /amber = peak, blue = off-peak/);
+  assert.match(en.tree.props.title, /amber = Busy, blue = Free/);
   const off = await renderAt('2026-10-29T05:00:00Z', { wide: true }, { locale: 'en' });
   assert.match(off.text, /50% off/);
 });

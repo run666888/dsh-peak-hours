@@ -2,29 +2,36 @@
 
 一个 DeepSeek Harness 插件，做两件事：
 
-1. **侧栏角标**：现在是不是高峰计价时段；
+1. **底栏角标**：现在是不是高峰计价时段、还有多久切换；
 2. **设置页卡片**：把你自己的用量按高峰/空闲拆开，并算出「实际花了多少」对比「全在高峰 / 全在空闲要花多少」。
 
-![侧栏角标](screenshots/screenshot-1.png)
+设置页卡片：
+
+![设置页卡片](screenshots/screenshot-1.png)
+
+底栏角标（和权限、模型名同一行）：
+
+![底栏角标](screenshots/screenshot-2.png)
 
 ![ci](https://github.com/run666888/dsh-peak-hours/actions/workflows/ci.yml/badge.svg)
 
 ## 它显示什么
 
-挂在侧栏底部动作行（`sidebar.footer.action`，「插件市场」下面），一行搞定三件事：
+嵌在**输入框底栏**（`conversation.input.right`）里，和「完全权限」「模型名」「上下文占用」同一行，一行说完三件事：
 
-- **状态**：橙点 = 高峰，蓝点 = 空闲；后面跟当前倍率（高峰 `×2`，空闲 `5 折`）
-- **倒计时**：还有多久切换（`3小时11分后转空闲`）
-- **全天日程条**：00:00–24:00 一条 8px 高的条，橙色段是高峰、蓝色段是空闲，白色竖线是当前时刻——一天里什么时候贵，一眼看全
+- **状态灯**：橙点 = 高峰（Busy），蓝点 = 空闲（Free）
+- **当前时间**：北京时间，秒级跳动
+- **倒计时**：还有多久切换，例如 `2 days 07:11`（超过一天用 `days`，否则 `H:MM:SS`）
 
-侧栏折叠成窄轨时自动退化为「圆点 + 一小截进度条」，不占地方。
+空间够的时候角标会停在「`+` 与模型名之间的空白带」中点；窗口变窄、或打开右侧边栏后放不下时，**优先让尾部（模型名 / 上下文 / 档位 / 百分比）换到第二行**，角标本身始终完整显示。是否换行按这一行的自然宽度算，跟窗口宽度无关，所以拖动窗口或开合侧栏都不会来回跳。
 
-**距切换不到 10 分钟**时，倒计时会变成琥珀色加粗、圆点轻微脉冲，提醒你「要涨价了」或「要降价了」（系统开启减少动态效果时动画自动关闭）。
+**鼠标悬停**（或键盘聚焦）角标会弹出一张详情卡：
 
-**点一下角标**（或聚焦后按 Enter / 空格）会把当前状态复制到剪贴板，例如
-`DeepSeek 高峰 ×2 · 3小时11分后转空闲（北京时间）`，方便贴给同事。
-
-鼠标悬停能看到完整说明：当前段起止时间、明天是工作日还是休息、以及高峰/空闲的价格表。
+- 顶部：状态灯 + `Busy` / `Free` + 当前倍率（高峰 `×2`，空闲 `5 折`）
+- 现在 · Now：当前北京时间
+- 距切换 · Countdown：距离下一次切换的时间，箭头后是切换后的状态（`→ Busy` / `→ Free`）
+- 本段：当前这一段的起止时间
+- 明天 · Tomorrow：明天是工作日、周末还是法定节假日
 
 ## 计费规则
 
@@ -81,7 +88,7 @@ dsh plugin --profile web remove dsh-peak-hours
 
 ## 兼容性
 
-- 需要带客户端 UI 的 DeepSeek Harness Web GUI（`dsh.client` 声明为 `platform: web`）
+- 需要带客户端 UI 的 DeepSeek Harness Web GUI（`dsh.client` 声明为 `platform: web`）；内联角标挂在 `conversation.input.right`，挂在 `sidebar.footer.action` 的旧侧栏角标已移除
 - 客户端 + 一个只读的 host 半：host 半注册一条 `GET /dsh-peak-hours/api/usage`，读取本机会话日志算峰谷账，**不发任何网络请求**；除 `~/.dsh/storages/peak-hours/cache.json` 这一份解析缓存外不写文件，不需要任何配置或凭据
 - 角标部分纯客户端，不依赖 host 半；即使 host 半取数失败，角标照常工作
 - 颜色是固定值（高峰 `#f59e0b`、空闲 `#4d6bfe`，即 DeepSeek 品牌蓝），不跟随主题 `brand-primary`，以免换皮肤后蓝色被改成别的色
@@ -89,13 +96,13 @@ dsh plugin --profile web remove dsh-peak-hours
 ## 开发
 
 ```sh
-npm test          # 24 个单元测试（node --test，零依赖）
+npm test          # 25 个单元测试（node --test，零依赖）
 npm run verify    # npm pack --dry-run，检查发布清单
 ```
 
 测试分两块，全部零依赖、不用起 GUI：
 
-- `test/schedule.test.mjs`：通过 `vm` 加载 `client.js`，用最小的 React / locale / document 替身渲染角标，验证时段边界、日程条分段与宽度、游标位置、折叠态、复制与中英文 key 对齐
+- `test/schedule.test.mjs`：通过 `vm` 加载 `client.js`，用最小的 React / locale / document 替身渲染角标，验证时段边界、节假日、倒计时、角标与详情卡文案、注册点与中英文 key 对齐
 - `test/usage.test.mjs`：直接测 host 半的 `lib/schedule.js` 与 `lib/usage.js`，用合成事件验证窗口判定、节假日、模型分类、价格公式、`turn+step` 替换语义、按日+小时+模型分桶、峰谷费用对比与区间过滤
 
 设置页卡片还有一个独立的 headless 渲染检查（真实接口数据 + 最小 hooks 替身），确认取数成功后不会渲染崩溃。
