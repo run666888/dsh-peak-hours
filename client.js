@@ -583,14 +583,14 @@ window.__ModuleLoader__.load({
         h('span', { key: 'cursor', className: 'dshph-cursor', style: { left: cursorLeft } }),
       );
 
+      // 根节点**不要**放 aria-label / aria-labelledby：sidebar.footer.action 的所有者
+      // 会把这个属性当行文本投影出来，整个子树被换成一行纯文本（圆点、日程条都会消失，
+      // 1.11.0 起踩过这个坑）。无障碍名交给可见文本 + title。
       const common = {
         title,
-        role: 'button',
         tabIndex: 0,
         onClick: onCopy,
         onKeyDown,
-        'aria-label':
-          t('label') + ': ' + stateText + ', ' + remaining + '. ' + t('tip.hint'),
       };
 
       if (!wide) {
@@ -907,6 +907,7 @@ window.__ModuleLoader__.load({
             UsageCard,
           ),
         );
+
       },
     };
   },
