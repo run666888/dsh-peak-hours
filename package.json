@@ -1,6 +1,6 @@
 {
   "name": "dsh-peak-hours",
-  "version": "1.12.1",
+  "version": "1.12.2",
   "type": "module",
   "description": "Sidebar badge that marks the current DeepSeek peak-pricing window (24-hour schedule bar, countdown, click to copy) plus a settings card that splits your logged usage into peak / off-peak tokens and compares what it actually cost against all-peak and all-off-peak.",
   "license": "MIT",
