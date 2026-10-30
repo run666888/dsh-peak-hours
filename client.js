@@ -866,16 +866,34 @@ window.__ModuleLoader__.load({
       apply(ctx) {
         ctx.effect(ensureStyle, 'dsh-peak-hours-style');
 
-        // 语言包晚到也不影响：locale 可用时立刻补注册并接管文案。
+        // 语言包：untyped 版 register 是 (ns, localeId, dict) 三参；
+        // 两参的 { zh, en } 形式只存在于 typed 重载（LocaleNamespaceMap 里有该 ns），
+        // 我们的 ns 不在合并表里，用两参会抛 "locale 不是 BCP 47"，字典就永远注册不上。
         ctx.inject(['locale'], (c) => {
-          if (!c.locale || typeof c.locale.register !== 'function') return;
+          const loc = c && c.locale;
+          if (!loc || typeof loc.register !== 'function') return;
+          let ids = [];
           try {
-            c.locale.register(NS, { zh: ZH, en: EN });
+            const snap =
+              typeof loc.getSnapshot === 'function' ? loc.getSnapshot() : loc.getLocale();
+            ids = (snap && snap.locales ? snap.locales : []).map((l) => l.id);
           } catch {
-            /* 已注册过（例如热重载），沿用现有字典 */
+            /* 拿不到语言列表就用内置推断 */
+          }
+          const pick = (re, fallback) => ids.find((id) => re.test(id)) || fallback;
+          const packs = [
+            [pick(/^zh/i, 'zh-CN'), ZH],
+            [pick(/^en/i, 'en'), EN],
+          ];
+          for (const [id, dict] of packs) {
+            try {
+              loc.register(NS, id, dict);
+            } catch {
+              /* 已注册过（例如热重载），沿用现有字典 */
+            }
           }
           try {
-            const bound = c.locale.bind(NS);
+            const bound = loc.bind(NS);
             if (typeof bound === 'function') translate = bound;
           } catch {
             /* 保留内置兜底 */
