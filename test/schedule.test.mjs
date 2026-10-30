@@ -19,27 +19,37 @@ function makeReact() {
   };
 }
 
-/** 最小 locale 服务替身：支持 register(ns, {zh, en}) 与 bind(ns)。 */
+/** 最小 locale 服务替身：对应真实 API —— register(ns, localeId, dict) 三参 + bind(ns)。 */
 function makeLocale(activeLocale) {
   const packs = new Map();
   let active = activeLocale;
   return {
     packs,
     service: {
-      register(ns, dict) {
-        packs.set(ns, dict);
-        return () => packs.delete(ns);
+      register(ns, localeId, dict) {
+        packs.set(ns + '|' + localeId, dict);
+        return () => packs.delete(ns + '|' + localeId);
       },
       bind(ns) {
         return (key) => {
-          const dict = packs.get(ns) || {};
-          const pack = String(active).startsWith('zh') ? dict.zh : dict.en;
-          if (pack && pack[key] !== undefined) return pack[key];
-          const other = String(active).startsWith('zh') ? dict.en : dict.zh;
-          return other && other[key] !== undefined ? other[key] : key;
+          const order = String(active).startsWith('zh')
+            ? [active, 'en']
+            : [active, 'zh-CN'];
+          for (const id of order) {
+            const dict = packs.get(ns + '|' + id);
+            if (dict && dict[key] !== undefined) return dict[key];
+          }
+          return key;
         };
       },
-      getSnapshot: () => ({ active, locales: ['zh-CN', 'en'], revision: 0 }),
+      getSnapshot: () => ({
+        active,
+        locales: [
+          { id: 'zh-CN', label: '简体中文' },
+          { id: 'en', label: 'English' },
+        ],
+        revision: 0,
+      }),
       subscribe: () => () => {},
     },
     setActive: (next) => {
@@ -256,7 +266,10 @@ test('英文语言包：不泄漏 key，且用词与配色一致', async () => {
 
 test('中英文语言包的 key 完全对齐', async () => {
   const zh = await loadPlugin({ locale: 'zh-CN' });
-  const dict = zh.packs.get('dsh-peak-hours');
+  const dict = {
+    zh: zh.packs.get('dsh-peak-hours|zh-CN'),
+    en: zh.packs.get('dsh-peak-hours|en'),
+  };
   assert.ok(dict, '应注册 dsh-peak-hours 语言包');
   const zhKeys = Object.keys(dict.zh).sort();
   const enKeys = Object.keys(dict.en).sort();
@@ -270,4 +283,15 @@ test('中英文语言包的 key 完全对齐', async () => {
   assert.equal(zh.meta.id, 'dsh-peak-hours');
   assert.equal(zh.meta.key, 'dsh-peak-hours');
   assert.equal(zh.meta.order, 20);
+});
+
+test('中文环境：设置页卡片用中文渲染（register 走三参 API）', async () => {
+  const plugin = await loadPlugin({ locale: 'zh-CN', now: Date.parse('2026-10-29T02:30:00Z') });
+  const card = plugin.slots.find((s) => s.meta.name === 'settings.general.item');
+  assert.ok(card, '应注册设置页卡片');
+  assert.ok(plugin.packs.get('dsh-peak-hours|zh-CN'), '中文语言包必须用 (ns, localeId, dict) 三参注册');
+  const tree = card.comp();
+  const text = textOf(tree);
+  assert.match(text, /高峰/, '设置页卡片应是中文');
+  assert.doesNotMatch(text, /usage\.(title|desc|actual)|Peak share/, '不应泄漏 key 或退化成英文');
 });
